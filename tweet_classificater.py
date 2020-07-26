@@ -59,8 +59,13 @@ class Tweet_Clasificater:
         }
         query_mmappings={
             "properties":{
-                "text":{"type":"text"}
-                "query":{"type":"percolator"}
+                "search":{
+                    "properties":{
+                        "category":{"type":"text"},
+                        "query":{"type":"percolator"}
+                    }
+                },
+                "text":{"type":"text","analyzer":"my_analyzer","fielddata":True},
             }
         }
         self.es.set_mapping(mappings)
@@ -93,17 +98,25 @@ class Tweet_Clasificater:
         }
             
         res=self.es.search(query)
+        likey_list=""
         for word in res["aggregations"]["significantCrimeTypes"]["buckets"]:
             print(word)
-        
+            if len(likey_list)==0 :
+                likey_list=word["key"]
+            else:
+                likey_list=likey_list+" "+word["key"]    
+        return likey_list
 
     #make_likey_listを使ってpercolator作る
-    def make_percolator(self):
+    def make_percolator(self,text):
         doc={
-            "query":{
-                "match":{
-                    "text":"単語"
-                }
+            "search":{
+                "category":"seccor",
+                "query":{
+                    "match":{
+                        "text":self.make_likey_list(text)
+                    }
+                }   
             }
         }
         self.esquery.insert_document(doc)
@@ -113,7 +126,7 @@ class Tweet_Clasificater:
         query={
             "query" : {
                 "percolate" : {
-                    "field" : "query",
+                    "field" : "search.query",
                     "document" : {
                         "text" : text
                     }
@@ -121,7 +134,7 @@ class Tweet_Clasificater:
             }
         }
         res=self.esquery.search(query)
-        print(res)
+        print(res["hits"]['hits'])
         
     def analyze_test(self,text):
         self.es.analyze_test("my_analyzer",text)
@@ -157,7 +170,10 @@ if __name__ == '__main__':
     elif argvs[1]=="analyzer":
         clasificater.analyze_test(argvs[2])
     elif argvs[1]=="make_list":
-        clasificater.make_likey_list(argvs[2])
+        clasificater.make_percolator(argvs[2])
     elif argvs[1]=="mappings":
         clasificater.set_mapping()
-        
+    elif argvs[1]=="search":
+        clasificater.percolator_search(argvs[2])
+    else :
+        print("error")
